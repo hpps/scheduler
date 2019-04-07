@@ -8,6 +8,10 @@ extern long long int CYCLE_VAL;
 
 #define QUANTUM_SIZE 1000000
 #define EPOCH_SIZE 5000
+#define MOPL 0.3
+#define PLNUM 3
+
+#include <math.h>
 
 int quantum_counter;
 int epoch_counter;
@@ -54,19 +58,64 @@ int drain_writes[MAX_NUM_CHANNELS];
 void schedule(int channel)
 {
 
-        quantum_counter++;
-        epoch_counter++;
+/* 
 
-//        printf("epoch_counter = %d\n", epoch_counter);
+    if (quantum_counter == 0) {
 
-        if (epoch_counter == EPOCH_SIZE) {
-            printf ("epoch!");
-            epoch_counter = 0;
+        // Initialization at the beginning of every quantum
+        for(i = 0; i < Ncore; i++) {
+            QReqCnt[i] = 0;
+            EReqCnt[i] = 0;
         }
-        if (quantum_counter == QUANTUM_SIZE) {
-            printf ("quantum!\n");
-            quantum_counter = 0;
+        IniPri[Ncore] = PLNUM = NxtGroup[Ncore];
+
+    }
+
+    quantum_counter++;
+    epoch_counter++;
+
+    // Memory Occupancy Monitor
+    for(i = 0; i < Ncore; i++) {
+        if (read_request_served(i) == TRUE) {
+            QReqCnt[i]++;
+            EReqCnt[i]++;
         }
+    }
+
+    // Multi-Level Comparator
+    for(i = 0; i < Ncore; i++) {
+        if (EReqCnt[i] < ReqPL) {
+            DynPri[i] = IniPri[i]; // Dynamic priority
+        }
+        else if (EReqCnt[i] >= (PLNUM-1)*ReqPl) {
+            DynPri[i] = 1;
+        else {
+            DynPri[i] = PLNUM - floor(EReqCnt/ReqPl);
+    }
+
+    // Cleared every epoch
+    if(epoch_counter == EPOCH_SIZE) {
+        for(i = 0; i < Ncore; i++) {
+            EReqCnt[i] = 0;
+            DynPri[i] = IniPri[i];
+        }
+
+        epoch_counter = 0;
+    }
+
+     
+    if (quantum_counter == QUANTUM_SIZE) {
+
+        // perform Algorithm 1: Grouping Algorithm
+        // grouping_algorithm();
+
+        quantum_counter = 0;
+
+    }
+
+
+    // OLD FCFS CODE BELOW (to be removed)
+
 
 	request_t * rd_ptr = NULL;
 	request_t * wr_ptr = NULL;
