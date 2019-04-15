@@ -7,7 +7,7 @@
 extern long long int CYCLE_VAL;
 
 // these are all tunables
-#define QUANTUM_SIZE 1000000
+#define QUANTUM_SIZE 100000
 #define EPOCH_SIZE 5000
 #define MOPL 0.3      // MOPL * PLNUM = 1 (ideally)
 #define PLNUM 3       // we will try 4 as well
@@ -16,11 +16,13 @@ extern long long int CYCLE_VAL;
 #define FALSE 0
 
 #include <math.h>
+#include <unistd.h>
+#include "params.h"
 
 #define MAX_NUMCORES 16
 
 int Ncore = MAX_NUMCORES;
-int Nchannel = MAX_NUM_CHANNELS;
+//int Nchannel = NUM_CHANNELS;
 
 int quantum_counter;
 int epoch_counter;
@@ -86,7 +88,7 @@ void grouping_algorithm() {
 
     for(i = 0; i < Ncore; i++) {
         ReqCnt[i] = 0;
-        for(j = 0; j < Nchannel; j++) {
+        for(j = 0; j < NUM_CHANNELS; j++) {
             ReqCnt[i] += QReqCnt[i][j];
         }
         TotalReqCnt += ReqCnt[i];
@@ -104,7 +106,7 @@ void grouping_algorithm() {
         NxtGroup[i] = PreGroup[i] && CurGroup[i];
         PreGroup[i] = CurGroup[i];
     }
-    ReqPL = TotalReqCnt * MOPL * EPOCH_SIZE / QUANTUM_SIZE / Ncore / Nchannel;
+    ReqPL = TotalReqCnt * MOPL * EPOCH_SIZE / QUANTUM_SIZE / Ncore / NUM_CHANNELS;
 
 }
 
@@ -126,6 +128,8 @@ void schedule(int channel)
     int i;
     int j = channel;
 
+    request_t * curr = NULL;
+
     if (quantum_counter == 0) {
 
         // Initialization at the beginning of every quantum
@@ -136,14 +140,37 @@ void schedule(int channel)
         }
     }
 
-    quantum_counter++;
-    epoch_counter++;
+
+    if (channel == 0) {
+        quantum_counter++;
+        epoch_counter++;
+    }
+
+//    printf("channel = %d, quantum = %d, epoch = %d\n", j, quantum_counter, epoch_counter);
+
+    //counting
+    for(int j=0; j<NUM_CHANNELS; j++){
+        LL_FOREACH(read_queue_head[j],curr){
+            for(int i=0; i<NUMCORES; i++){
+                printf("%d.%d: thread_id = %d,", i, j, curr->thread_id);
+                printf("request_served = %d\n", curr->request_served);
+            }
+        }
+    }
+
 
     // Memory Occupancy Monitor
     for(i = 0; i < Ncore; i++) {
-        if (read_queue_head[channel]->request_served == TRUE) {
-            QReqCnt[i][j]++;
-            EReqCnt[i][j]++;
+        LL_FOREACH(read_queue_head[channel], curr) {
+//            printf("channel %d: read_queue_head[%d] = %x\n", channel, channel, read_queue_head[channel]);
+            if (read_queue_head[channel]->request_served == TRUE) {
+//                printf("TRUE\n");
+                QReqCnt[i][j]++;
+                EReqCnt[i][j]++;
+            }
+            else {
+//                printf("FALSE\n");
+            }
         }
     }
 
@@ -174,92 +201,26 @@ void schedule(int channel)
     }
 
      
+//    printf("channel = %d\n", j);
     if (quantum_counter == QUANTUM_SIZE) {
 
+        printf("j = %d, NUM_CHANNELS-1 = %d\n", j, NUM_CHANNELS-1);
         for(i = 0; i < Ncore; i++) {
             printf("QReqCnt[%d][%d] = %d; ", i, j, QReqCnt[i][j]);
             printf("EReqCnt[%d][%d] = %d\n", i, j, EReqCnt[i][j]);
 
         }
 
-        if (channel == MAX_NUM_CHANNELS-1) {
-            grouping_algorithm();
-        }
+        sleep(10);
 
-        quantum_counter = 0;
+        if (j == NUM_CHANNELS-1) {
+            grouping_algorithm();
+            quantum_counter = 0;
+        }
 
     }
 
 }
-
-
-
-/*
-
-    // OLD FCFS CODE BELOW (to be removed)
-
-
-	request_t * rd_ptr = NULL;
-	request_t * wr_ptr = NULL;
-
-
-	// if in write drain mode, keep draining writes until the
-	// write queue occupancy drops to LO_WM
-	if (drain_writes[channel] && (write_queue_length[channel] > LO_WM)) {
-	  drain_writes[channel] = 1; // Keep draining.
-	}
-	else {
-	  drain_writes[channel] = 0; // No need to drain.
-	}
-
-	// initiate write drain if either the write queue occupancy
-	// has reached the HI_WM , OR, if there are no pending read
-	// requests
-	if(write_queue_length[channel] > HI_WM)
-	{
-		drain_writes[channel] = 1;
-	}
-	else {
-	  if (!read_queue_length[channel])
-	    drain_writes[channel] = 1;
-	}
-
-
-	// If in write drain mode, look through all the write queue
-	// elements (already arranged in the order of arrival), and
-	// issue the command for the first request that is ready
-	if(drain_writes[channel])
-	{
-
-		LL_FOREACH(write_queue_head[channel], wr_ptr)
-		{
-			if(wr_ptr->command_issuable)
-			{
-				issue_request_command(wr_ptr);
-				break;
-			}
-		}
-		return;
-	}
-
-	// Draining Reads
-	// look through the queue and find the first request whose
-	// command can be issued in this cycle and issue it 
-	// Simple FCFS 
-	if(!drain_writes[channel])
-	{
-		LL_FOREACH(read_queue_head[channel],rd_ptr)
-		{
-			if(rd_ptr->command_issuable)
-			{
-				issue_request_command(rd_ptr);
-				break;
-			}
-		}
-		return;
-	}
-
-*/
 
 void scheduler_stats()
 {
