@@ -6,7 +6,7 @@ OBJS = $(OBJDIR)/main.o $(OBJDIR)/memory_controller.o $(OBJDIR)/scheduler.o
 CC = gcc
 DEBUG = -g
 CFLAGS = -std=c99 -Wall -c $(DEBUG)
-LFLAGS = -Wall $(DEBUG)
+LFLAGS = -Wall $(DEBUG) -lm
 
 
 $(BINDIR)/$(OUT): $(OBJS)
